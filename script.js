@@ -1,4 +1,4 @@
-const API_KEY = 'AIzaSyAVPwa-b7U7vOwLdLEbqeS9dwOSCmhy7og';
+const API_KEY = 'AIzaSyA1kUgKi87qD14cUVf02B37s6qiJMMOakM';
 const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
 class QuizApp {
