@@ -22,7 +22,10 @@ class QuizApp {
         this.initializeKeyboardShortcuts();
         this.initializeTheme();
         this.initializeTabs();
-        this.enhanceMobileSupport();
+        
+        // Handle mobile viewport height
+        this.handleAppHeight();
+        window.addEventListener('resize', () => this.handleAppHeight());
     }
 
     initializeElements() {
@@ -95,6 +98,9 @@ class QuizApp {
         this.topicInputWrapper = document.getElementById('topicInput');
         this.pdfInputWrapper = document.getElementById('pdfInput');
         this.textInputWrapper = document.getElementById('textInput');
+        
+        // Touch elements that need feedback
+        this.touchElements = document.querySelectorAll('.option, .option-card, .count-btn, .nav-btn, .generate-btn, .next-btn, .skip-btn, .restart-btn, .share-btn, .tab-btn');
     }
 
     attachEventListeners() {
@@ -140,6 +146,12 @@ class QuizApp {
             if (e.target.value) {
                 document.querySelectorAll('.count-btn').forEach(b => b.classList.remove('active'));
             }
+        });
+        
+        // Add touch feedback
+        this.touchElements.forEach(element => {
+            element.addEventListener('touchstart', () => element.classList.add('touch-active'), {passive: true});
+            element.addEventListener('touchend', () => element.classList.remove('touch-active'), {passive: true});
         });
     }
 
@@ -216,12 +228,8 @@ class QuizApp {
         const file = event.target.files[0];
         if (!file) return;
         
-        // Add this check for mobile devices with limited memory
-        const isMobile = window.innerWidth <= 768;
-        const maxSizeForMobile = 5 * 1024 * 1024; // 5MB for mobile
-        
-        if (isMobile && file.size > maxSizeForMobile) {
-            alert('File is too large for mobile processing. Please use a smaller PDF (under 5MB) or try on desktop.');
+        if (file.size > 10 * 1024 * 1024) { // 10MB limit
+            alert('File is too large. Maximum size is 10MB.');
             this.pdfFile.value = '';
             return;
         }
@@ -439,13 +447,19 @@ class QuizApp {
         this.currentQuestion = 0;
         this.score = 0;
         this.startTime = new Date();
+        this.skippedQuestions = [];
+        this.questionResponses = [];
+        
+        document.querySelector('.container').classList.add('quiz-active');
         this.inputSection.classList.add('hidden');
         this.quizSection.classList.remove('hidden');
         
-        // Hide the sidebar when starting the quiz
-        document.querySelector('.container').classList.add('quiz-active');
+        if (this.quizOptions.timed) {
+            this.startTimer();
+        } else {
+            this.timerDisplay.parentElement.classList.add('hidden');
+        }
         
-        this.startTimer();
         this.showQuestion();
     }
 
@@ -594,118 +608,153 @@ class QuizApp {
     }
 
     showPerformanceAnimation(scorePercentage) {
-        // Set animation content based on score
-        let icon, title, message;
+        this.performanceScore.textContent = `${scorePercentage}%`;
         
         if (scorePercentage >= 80) {
-            icon = '🎉';
-            title = 'Outstanding!';
-            message = 'You\'re a Quiz Master!';
+            this.performanceIcon.textContent = '🎉';
+            this.performanceTitle.textContent = 'Outstanding!';
+            this.performanceMessage.textContent = 'You\'re a Quiz Master!';
+            
+            // Trigger confetti
             confetti({
-                particleCount: this.isMobile ? 50 : 100,
-                spread: this.isMobile ? 50 : 70,
+                particleCount: 100,
+                spread: 70,
                 origin: { y: 0.6 }
             });
         } else if (scorePercentage >= 60) {
-            icon = '👍';
-            title = 'Good Job!';
-            message = 'Keep practicing to improve!';
-        } else if (scorePercentage >= 40) {
-            icon = '💪';
-            title = 'Keep Going!';
-            message = 'Learning takes time. Keep practicing!';
+            this.performanceIcon.textContent = '👏';
+            this.performanceTitle.textContent = 'Well Done!';
+            this.performanceMessage.textContent = 'You have a good understanding of the subject!';
+            
+            // Only use confetti on non-mobile devices or check for performance
+            if (window.innerWidth > 768 && scorePercentage >= 60) {
+                const particleCount = scorePercentage >= 80 ? 100 : 50;
+                confetti({
+                    particleCount: particleCount,
+                    spread: scorePercentage >= 80 ? 70 : 50,
+                    origin: { y: 0.6 }
+                });
+            }
         } else {
-            icon = '📚';
-            title = 'Keep Learning!';
-            message = 'Don\'t give up! You\'ll get better with practice.';
+            this.performanceIcon.textContent = '💪';
+            this.performanceTitle.textContent = 'Keep Going!';
+            this.performanceMessage.textContent = 'Learning takes time. Keep practicing!';
         }
         
-        // Update the performance animation elements
-        this.performanceIcon.textContent = icon;
-        this.performanceTitle.textContent = title;
-        this.performanceScore.textContent = `${Math.round(scorePercentage)}%`;
-        this.performanceMessage.textContent = message;
-        
-        // Show the animation
         this.performanceAnimation.classList.remove('hidden');
     }
 
     hidePerformanceAnimation() {
-        // Hide the animation
         this.performanceAnimation.classList.add('hidden');
-        
-        // Show the results section
-        this.resultsSection.classList.remove('hidden');
-        
-        // Create and display performance chart
-        this.createPerformanceChart();
-        
-        // Update leaderboard with latest result
-        this.updateLeaderboard();
+        this.showResults();
     }
 
     showResults() {
-        clearInterval(this.timer);
-        this.quizSection.classList.add('hidden');
+        this.resultsSection.classList.remove('hidden');
         
-        // Keep the sidebar hidden during results
-        document.querySelector('.container').classList.add('quiz-active');
-        
-        const percentage = Math.round((this.score / this.questions.length) * 100);
+        // Update score and time
         const quizDuration = new Date() - this.startTime;
+        const scorePercentage = Math.round((this.score / this.questions.length) * 100);
         
-        // Update score and time display
-        this.finalScore.textContent = `${percentage}%`;
+        this.finalScore.textContent = `${scorePercentage}%`;
         this.timeTaken.textContent = this.formatTime(quizDuration);
         
-        // Show performance animation instead of immediately showing results
-        this.showPerformanceAnimation(percentage);
+        // Create performance chart
+        this.createPerformanceChart();
+        
+        // Update leaderboard
+        this.updateLeaderboard();
     }
 
     createPerformanceChart() {
-        if (this.performanceChart) {
-            // Clear any existing chart
-            if (this.chartInstance) {
-                this.chartInstance.destroy();
+        const ctx = this.performanceChart.getContext('2d');
+        
+        // Organize data by difficulty
+        const difficultyData = {
+            easy: { correct: 0, incorrect: 0, total: 0 },
+            medium: { correct: 0, incorrect: 0, total: 0 },
+            hard: { correct: 0, incorrect: 0, total: 0 }
+        };
+        
+        this.questionResponses.forEach(response => {
+            const difficulty = response.difficulty.toLowerCase();
+            difficultyData[difficulty].total++;
+            
+            if (response.isCorrect) {
+                difficultyData[difficulty].correct++;
+            } else {
+                difficultyData[difficulty].incorrect++;
             }
-            
-            // Prepare chart data
-            const correctCount = this.score;
-            const incorrectCount = this.questions.length - this.score;
-            
-            // Add responsive options for mobile
-            const isMobile = window.innerWidth <= 768;
-            
-            // Create chart
-            this.chartInstance = new Chart(this.performanceChart, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Correct', 'Incorrect'],
-                    datasets: [{
-                        data: [correctCount, incorrectCount],
-                        backgroundColor: [
-                            getComputedStyle(document.documentElement).getPropertyValue('--correct-color'),
-                            getComputedStyle(document.documentElement).getPropertyValue('--wrong-color')
-                        ],
-                        borderWidth: 0
-                    }]
+        });
+        
+        // Calculate accuracy by difficulty
+        const labels = ['Easy', 'Medium', 'Hard'];
+        const accuracyData = [
+            difficultyData.easy.total ? (difficultyData.easy.correct / difficultyData.easy.total) * 100 : 0,
+            difficultyData.medium.total ? (difficultyData.medium.correct / difficultyData.medium.total) * 100 : 0,
+            difficultyData.hard.total ? (difficultyData.hard.correct / difficultyData.hard.total) * 100 : 0
+        ];
+        
+        // Get theme colors
+        const correctColor = getComputedStyle(document.documentElement).getPropertyValue('--correct-color').trim();
+        const wrongColor = getComputedStyle(document.documentElement).getPropertyValue('--wrong-color').trim();
+        const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-color').trim();
+        
+        // Create chart
+        if (window.performanceChartInstance) {
+            window.performanceChartInstance.destroy();
+        }
+        
+        window.performanceChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Accuracy (%)',
+                    data: accuracyData,
+                    backgroundColor: [
+                        'rgba(106, 176, 76, 0.6)',
+                        'rgba(104, 109, 224, 0.6)',
+                        'rgba(235, 77, 75, 0.6)'
+                    ],
+                    borderColor: [
+                        'rgba(106, 176, 76, 1)',
+                        'rgba(104, 109, 224, 1)',
+                        'rgba(235, 77, 75, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        },
+                        ticks: {
+                            color: textColor
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            color: textColor
+                        }
+                    }
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: isMobile ? 'top' : 'bottom',
-                            labels: {
-                                boxWidth: isMobile ? 12 : 20,
-                                padding: isMobile ? 10 : 20,
-                                color: getComputedStyle(document.documentElement).getPropertyValue('--text-color')
-                            }
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: textColor
                         }
                     }
                 }
-            });
-        }
+            }
+        });
     }
 
     updateLeaderboard() {
@@ -874,11 +923,9 @@ class QuizApp {
     }
 
     restart() {
+        document.querySelector('.container').classList.remove('quiz-active');
         this.resultsSection.classList.add('hidden');
         this.inputSection.classList.remove('hidden');
-        
-        // Show the sidebar again when returning to the input section
-        document.querySelector('.container').classList.remove('quiz-active');
         
         // Clear input fields
         this.topicField.value = '';
@@ -936,120 +983,14 @@ class QuizApp {
         });
     }
 
-    // Enhance mobile touch support
-    enhanceMobileSupport() {
-        // Add active state for touch feedback
-        const touchElements = document.querySelectorAll('.option, .option-card, .count-btn, .nav-btn, .tab-btn');
-        
-        touchElements.forEach(element => {
-            element.addEventListener('touchstart', function() {
-                this.classList.add('touch-active');
-            }, { passive: true });
-            
-            element.addEventListener('touchend', function() {
-                this.classList.remove('touch-active');
-            }, { passive: true });
-            
-            element.addEventListener('touchcancel', function() {
-                this.classList.remove('touch-active');
-            }, { passive: true });
-        });
-        
-        // Fix iOS Safari 100vh issue
-        const appHeight = () => {
-            const doc = document.documentElement;
-            doc.style.setProperty('--app-height', `${window.innerHeight}px`);
-        };
-        
-        window.addEventListener('resize', appHeight);
-        appHeight();
-        
-        // Add fastclick to remove 300ms delay on mobile browsers
-        if ('ontouchstart' in window) {
-            document.addEventListener('touchstart', function(){}, {passive: true});
-        }
-    }
-
-    // Modify the constructor to include mobile support
-    constructor() {
-        // Existing code...
-        this.initializeElements();
-        this.attachEventListeners();
-        this.initializeKeyboardShortcuts();
-        this.initializeTheme();
-        this.initializeTabs();
-        this.enhanceMobileSupport(); // Add mobile optimizations
-    }
-
-    // Improve PDF handling for mobile
-    async handlePDFUpload(event) {
-        // Existing code...
-        
-        try {
-            // Add this check for mobile devices with limited memory
-            const isMobile = window.innerWidth <= 768;
-            const maxSizeForMobile = 5 * 1024 * 1024; // 5MB for mobile
-            
-            if (isMobile && file.size > maxSizeForMobile) {
-                alert('File is too large for mobile processing. Please use a smaller PDF (under 5MB) or try on desktop.');
-                this.pdfFile.value = '';
-                return;
-            }
-            
-            // Rest of the existing code...
-        } catch (error) {
-            // Error handling...
-        }
-    }
-
-    // Make the performance animation more mobile-friendly
-    showPerformanceAnimation(scorePercentage) {
-        // Existing code...
-        
-        // Make confetti mobile-friendly
-        const isMobile = window.innerWidth <= 768;
-        if (scorePercentage >= 80) {
-            // Reduce particle count on mobile
-            confetti({
-                particleCount: isMobile ? 50 : 100,
-                spread: isMobile ? 50 : 70,
-                origin: { y: 0.6 }
-            });
-        }
-        
-        // Rest of existing code...
-    }
-
-    // Optimize chart rendering for mobile
-    createPerformanceChart() {
-        if (this.performanceChart) {
-            // Existing code...
-            
-            // Add responsive options for mobile
-            const isMobile = window.innerWidth <= 768;
-            
-            this.chartInstance = new Chart(this.performanceChart, {
-                // Existing configuration...
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: isMobile ? 'top' : 'bottom',
-                            labels: {
-                                boxWidth: isMobile ? 12 : 20,
-                                padding: isMobile ? 10 : 20,
-                                color: getComputedStyle(document.documentElement).getPropertyValue('--text-color')
-                            }
-                        }
-                    }
-                }
-            });
-        }
+    handleAppHeight() {
+        // Fix for mobile browser viewport issues
+        const doc = document.documentElement;
+        doc.style.setProperty('--app-height', `${window.innerHeight}px`);
     }
 }
 
 // Initialize the app when document is loaded
 document.addEventListener('DOMContentLoaded', () => {
     new QuizApp();
-}); 
+});
