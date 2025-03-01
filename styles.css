@@ -113,28 +113,45 @@ body {
 
 /* Media query for mobile layout */
 @media (max-width: 768px) {
+    body {
+        padding: 0;
+        margin: 0;
+        overflow-x: hidden;
+    }
+    
     .container {
-        min-height: 100vh;
-        width: 100%;
-        border-radius: 0;
-        box-shadow: none;
-        display: block;
-        overflow-y: auto;
+        grid-template-columns: 1fr;
+        display: flex;
+        flex-direction: column;
     }
     
     .app-sidebar {
-        width: 100%;
         padding: 15px;
-        border-radius: 0;
-        border-bottom: 2px solid rgba(255, 255, 255, 0.1);
     }
     
     .sidebar-logo {
         margin-bottom: 15px;
     }
     
+    .sidebar-logo h1 {
+        font-size: 1.5rem;
+    }
+    
     .app-content {
-        padding: 15px;
+        position: relative;
+        z-index: 0;
+    }
+    
+    /* Force the content to be visible and properly scrollable */
+    html, body {
+        height: auto;
+        overflow-y: auto;
+    }
+    
+    /* Ensure the quiz mode properly displays on mobile */
+    .container.quiz-active {
+        height: 100%;
+        overflow: auto;
     }
     
     .options-grid {
@@ -1453,6 +1470,9 @@ textarea:focus + .input-icon {
     color: white;
     border-radius: 10px;
     text-align: center;
+    -webkit-appearance: none; /* Fix rendering on iOS */
+    appearance: none;
+    font-size: 16px; /* Prevent iOS zoom on focus */
 }
 
 .app-sidebar #customCount::placeholder {
@@ -1573,5 +1593,28 @@ textarea:focus + .input-icon {
     
     .container.quiz-active .app-content {
         padding: 20px;
+    }
+}
+
+/* Fix for custom number input */
+.app-sidebar #customCount {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    border-radius: 10px;
+    text-align: center;
+    -webkit-appearance: none; /* Fix rendering on iOS */
+    appearance: none;
+    font-size: 16px; /* Prevent iOS zoom on focus */
+}
+
+/* Make buttons more tappable on mobile */
+@media (max-width: 768px) {
+    .generate-btn {
+        min-height: 50px;
+        margin-top: 15px;
+        padding: 15px 20px;
     }
 } 
